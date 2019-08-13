@@ -64,6 +64,7 @@ def find_img_channel_name(file_name):
 
     return channel_name
 
+### Returns image that is background subtracted using the rolling ball method ###
 def rolling_ball_subtract(img):
     z_size = img.shape[0]
 
@@ -79,6 +80,7 @@ def max_project(img):
     projection = np.max(img, axis=0)
     return projection
 
+### Returns image that has been filtered using a gaussian blue ###
 def gaussian_blur(img):
     print("gaussian blur  started")
     z_size = img.shape[0]
@@ -194,6 +196,11 @@ def find_max_z(r, c, ch_img, box_size=3):
 
     return np.argmax(z)
 
+## This method takes an image (usually that is either background subtracted or has some type of blur) and ##
+## is used to try to find the best threshold for the factor of interest. It outputs a single slice image  ##
+## of the different built in thresholding methods. Based on the threshold used, it quantifies the number  ##
+## of objects detected, but does not perform watershedding or hole filling etc. This can be added on later #
+
 def threshold_puncta(img, data,input_params,channel):
     z_size = img.shape[0]
 
@@ -219,10 +226,10 @@ def threshold_puncta(img, data,input_params,channel):
         threshold = 569
     elif '6h Cis Med1 HCT 003' in data.rep_name:
         threshold = 562
+    elif 'IF 6h fib1 Cis HCT116 002' in data.rep_name:
+        threshold = 2819
     else:
         threshold = filters.threshold_triangle(float_img)
-    
-
         
     mask = float_img >= threshold
     puncta_mask = float_img >= threshold
@@ -231,10 +238,10 @@ def threshold_puncta(img, data,input_params,channel):
     fig, ax = plt.subplots(1,1)
     ax.imshow(exposure.equalize_adapthist(mask[z,:,:]), cmap='gray')
     plt.tight_layout()
-    plt.savefig(os.path.join(input_params.output_path, data.rep_name +" "+channel+ 'thresh_test_mean.png'), dpi=300)
+    plt.savefig(os.path.join(input_params.output_path, data.rep_name +" "+channel+ 'chosen_thresh_test.png'), dpi=300)
     plt.close()    
     
-    ### WATERSHED TEST                                                                                                                                    
+    ## quantify number of regions at chosen threshold
     labels, num_regions_threshold = nd.label(mask)
     
     distance = nd.distance_transform_edt(mask)
@@ -244,9 +251,12 @@ def threshold_puncta(img, data,input_params,channel):
     sure_fg[sure_fg <= 0.4*distance.max()] = 0
     sure_fg = sure_fg > 0
     sure_fg = nd.morphology.binary_erosion(sure_fg)
-
+    
+    ## number of regions for fast solution 
     markers, num_regions = nd.label(sure_fg)
     
+
+    ## print number of regions and find fraction of total nuclear area 
     print(num_regions_threshold)
     markers_no_nuc = np.where(data.nuc_mask!=False,labels,0)
     puncta = regionprops(markers_no_nuc)
@@ -254,8 +264,6 @@ def threshold_puncta(img, data,input_params,channel):
     for pt in puncta:    
         total_area.append(pt.area)
         
-
-
     row, col = optimum_subplots(mask.shape[0])
     fig, ax = plt.subplots(row, col)
     
@@ -275,23 +283,22 @@ def threshold_puncta(img, data,input_params,channel):
         
     return labels,num_regions,puncta,puncta_mask
 
+## pick a new centroid (x,y,z) between the dimensions of the image ##
 def set_random_centroid(data):
     z = data.nuc_mask.shape[0]
     
-
     rand_x = random.randint(0,1023)
     rand_y = random.randint(0,1023)
     rand_z = random.randint(0,z-1)
 
-    
+    ## check that new centroid is within nuclear mask ## 
     if data.nuc_mask[rand_z,rand_x,rand_y] == False:
         return set_random_centroid(data)
-
     
     return (rand_z,rand_x,rand_y)
         
-
-def get_differential(centroid, new_centroid, coords,data,z):
+## 
+def get_differential(centroid, new_centroid,coords,data,z):
     differential = tuple(np.subtract(new_centroid, centroid))
     for coord in coords:
         if int(coord[0]+differential[0]) < 0 or int(coord[0]+differential[0]) >= z or int(coord[1]+differential[1]) < 0 or int(coord[1]+differential[1]) >=1024 or int(coord[2]+differential[2]) < 0 or int(coord[2]+differential[2]) >= 1024:
@@ -303,43 +310,37 @@ def get_differential(centroid, new_centroid, coords,data,z):
     return differential
             
 
-## randomize puncta within nuclear regions of an image
+## randomize puncta within nuclear regions of an image ##
 def random_regions(markers, puncta,img, data,input_params):
-    ## img = 
-    ## markers = 
-    ## puncta = 
+
     z = data.nuc_mask.shape[0]
     nuc_mask = data.nuc_mask
     new_mask = np.zeros(shape=img.shape)
+
+    # loop through regions and get coordinates
     for props in puncta:
         c = props.centroid
-
         coords = props.coords
-
-        new_c = set_random_centroid(data)
-
-        differential  = get_differential(c,new_c,coords,data,z)#tuple(np.subtract(new_c,c))
+        new_c = set_random_centroid(data) # pick new random centroid
+        differential  = get_differential(c,new_c,coords,data,z) # get differential between new and old centroid
 
         i = 1
-        
+        # add coordinates of the new puncta to a mask
         for coord in coords:
             new_mask[int(coord[0]+differential[0]),int(coord[1]+differential[1]),int(coord[2]+differential[2])] = i
-            
 
     new_mask = new_mask > 0
-    z_slice = int(new_mask.shape[0]/2)
+    z_slice = int(new_mask.shape[0]/2) # visualize random puncta 
     fig, ax = plt.subplots(1,1)
     ax.imshow(exposure.equalize_adapthist(new_mask[z_slice,:,:]), cmap='gray')
     plt.tight_layout()
     plt.savefig(os.path.join(input_params.output_path, data.rep_name +" "+'random.png'), dpi=300)
     plt.close()
-    return new_mask
+    return new_mask # return the new mask
 
+## 
 def intensity_at_puncta(labels_488, img,num_puncta_488,data,input_params):
     img = img.astype(np.uint8)
-    #mean = np.mean(img)
-    #sd = np.std(img)
-    #img = (img - mean)/sd
     z_size = labels_488.shape[0]
     labels_488 = np.where(data.nuc_mask!=False,labels_488,0)
     mean_intensities = []
@@ -360,49 +361,16 @@ def intensity_at_puncta(labels_488, img,num_puncta_488,data,input_params):
     plt.close()
     return mean_intensities
 
+
+## 
 def manders(puncta_mask,img_561, npuncta,data,input_params):
 
     sum_puncta_intensities = np.sum(img_561[puncta_mask]) 
     sum_nuclear_intensities = np.sum(img_561[data.nuc_mask])
-    
-    #return sum_puncta_intensities/sum_nuclear_intensities
         
-    #labels_488 = np.where(data.nuc_mask!=False,labels_488,0)
-    #img_488 = np.where(labels_488!=0,img_488,0)
-    
-    #labels_561 = np.where(data.nuc_mask!=False,labels_561,0)
-    #img_561 = np.where(labels_561!=0,img_561,0)
-    
-    
-
-    #max_project_488 = max_project(img_488)
-    #max_project_561 = max_project(img_561)
-
-    #img_488 = max_project_488.ravel()
-    #img_561 = max_project_561.ravel()
-
-    #sum_pixels = []
-    #sum_488_sq = []
-    #sum_561_sq = []
-    '''
-    for i in range(len(img_488)):
-        temp_sum = img_488[i]*img_561[i]
-        sum_pixels.append(temp_sum)
-        temp_488_sq = img_488[i]*img_488[i]
-        temp_561_sq = img_561[i]*img_561[i]
-        sum_488_sq.append(temp_488_sq)
-        sum_561_sq.append(temp_561_sq)
-            
-    sum = np.sum(sum_pixels)
-    sum_488 = np.sum(sum_488_sq)
-    sum_561 = np.sum(sum_561_sq)
-    manders = sum/(math.sqrt(sum_488*sum_561))
-    '''
     return float(sum_puncta_intensities/sum_nuclear_intensities) 
-    
 
-
-
+##
 def threshold_test(data, input_params):
     img = data.nuc_img
     
@@ -434,7 +402,7 @@ def threshold_test(data, input_params):
        
     nuc_mask = nd.morphology.binary_opening(nuc_mask) 
 
-    ### WATERSHED TEST
+    ### WATERSHED TEST ###
     labels, _ = nd.label(nuc_mask)
     
     distance = nd.distance_transform_edt(nuc_mask)
