@@ -3,7 +3,6 @@
 ######!/lab/solexa_young/scratch/jon_henninger/tools/venv/bin/python  # server venv
 
 import matplotlib
-# matplotlib.use('Agg')
 matplotlib.use('tkagg')
 matplotlib.rcParams['pdf.fonttype'] = 42
 matplotlib.rcParams['ps.fonttype'] = 42
@@ -19,11 +18,7 @@ import sys
 from datetime import datetime
 from types import SimpleNamespace
 from pprint import pprint
-
 import methods
-
-
-
 
 def main():
     # user input
@@ -63,52 +58,27 @@ def main():
                 spots = pd.DataFrame(columns=['nuc_id', 'spot_id', 'channel', 'r', 'c', 'z'])
                 spot_count = 0
                 
-                 ### manders ####
-                
-                '''
-                no_backgrnd_img_488 = methods.subtract_median(data.pro_imgs['ch488'],data,input_params)
-                if 'HP1' in data.rep_name:
-                    blur_img_488 = methods.gaussian_blur(data.pro_imgs['ch488'])#no_backgrnd_img)                                                                                                                                                                                                                          
-                elif 'Med1' in data.rep_name:                                                                                                                
-                    blur_img_488 = methods.gaussian_blur(no_backgrnd_img_488)
-
-                no_backgrnd_img_561 = methods.subtract_median(data.pro_imgs['ch561'],data,input_params)
-                blur_img_561 = methods.gaussian_blur(no_backgrnd_img_561)
-
-                puncta_labels_488,npuncta_488 = methods.threshold_puncta(blur_img_488,data,input_params,'ch488')
-                puncta_labels_561,npunct_561 = methods.threshold_puncta(blur_img_561,data,input_params,'ch561')
-                mcc = methods.manders(puncta_labels_488,puncta_labels_561,data.pro_imgs['ch488'],data.pro_imgs['ch561'],data,input_params)
-                
-                print(data.rep_name)                                                                                                                       
-                #print(mcc) 
-                '''
                 for channel in data.pro_imgs:
-                    ###    First Attempt    ####
-                    ## SWH: step 1 - make definition in methods section called subtract_median(img)
-                    ## SWH: step 2 - This will subtract background from the image for input into find_blobs(img)
-                    #no_backgrnd_img = methods.subtract_median(data.pro_imgs[channel],data,input_params)
-                    #projection = methods.max_project(no_backgrnd_img)
-                    #print(projection)
-                    #methods.find_blobs(projection)
-                    #methods.find_blobs(data.pro_imgs[channel])
-                    #print(data.pro_imgs[channel])
-                    # find puncta here
-                    
-                
+                                    
                     print(data.rep_name)
                     print(channel)
-                    ###    Second Attempt   ###
+
+                    ###    Second Attempt   ###                    
                     if channel == 'ch488':
-                        #no_backgrnd_img = methods.subtract_median(data.pro_imgs[channel],data,input_params)
+                        
                         if 'HP1' in data.rep_name:
-                            blur_img = methods.gaussian_blur(data.pro_imgs[channel])#no_backgrnd_img)
+                            blur_img = methods.gaussian_blur(data.pro_imgs[channel])
                         elif 'Med1' in data.rep_name:
                             blur_img = methods.gaussian_blur(data.pro_imgs[channel])
-                            #blur_img = methods.gaussian_blur(data.pro_imgs[channel])
+                            
+                        elif 'fib1' in data.rep_name:
+                            blur_img = methods.gaussian_blur(data.pro_imgs[channel])
+                        
                         puncta_labels,npuncta,puncta,puncta_mask = methods.threshold_puncta(blur_img,data,input_params,channel)
                         npuncta_list.append(npuncta)
                         exp = data.rep_name +"_"+channel
                         exp_list.append(exp)
+                        
                         if 'HP1' in data.rep_name:
                             intensities = methods.intensity_at_puncta(puncta_labels,data.pro_imgs['ch561'],npuncta,data,input_params)
                             intensities_hp1.append(intensities)
@@ -118,7 +88,8 @@ def main():
                             intensities_med1.append(intensities)
                         
                         manders_list = []
-                        for i in range(1,100):
+                        for i in range(1,10):
+                            print(i)
                             random_puncta_mask = methods.random_regions(npuncta,puncta,data.pro_imgs['ch561'],data,input_params) 
                             manders = methods.manders(random_puncta_mask, data.pro_imgs['ch561'],npuncta, data,input_params)
                             manders_list.append(manders)
@@ -132,9 +103,6 @@ def main():
                     #no_backgrnd_img_488 = methods.subtract_median(data.pro_imgs['ch488'],data,input_params)
                     #no_backgrnd_img_561 = methods.subtract_median(data.pro_imgs['ch561'],data,input_params)
                     #methods.colocalize(no_backgrnd_img_488,no_backgrnd_img_561,data,input_params)#no_backgrnd_img_488,no_backgrnd_img_561,data,input_params)
-
-                
-               
                                 
                 
                 npuncta_list.append(npuncta)
